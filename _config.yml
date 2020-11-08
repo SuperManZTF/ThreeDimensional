@@ -13,8 +13,8 @@ timezone: ''
 
 # URL
 ## If your site is put in a subdirectory, set url as 'http://example.com/child' and root as '/child/'
-url: http://example.com
-root: /
+url: https://github.com/SuperManZTF/ThreeDimensional
+root: /ThreeDimensional/
 permalink: :year/:month/:day/:title/
 permalink_defaults:
 pretty_urls:
@@ -105,4 +105,4 @@ theme: landscape
 deploy:
   type: git
 	repository: https://github.com/SuperManZTF/ThreeDimensional.git
-	branch: master
+	branch: release
