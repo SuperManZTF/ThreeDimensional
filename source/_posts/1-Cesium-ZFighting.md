@@ -1,14 +1,14 @@
 ---
-title: Hello World
+title: Cesium-Z-Fighting 深度问题
 ---
-Welcome to [Hexo](https://hexo.io/)! This is your very first post. Check [documentation](https://hexo.io/docs/) for more info. If you get any problems when using Hexo, you can find the answer in [troubleshooting](https://hexo.io/docs/troubleshooting.html) or you can ask me on [GitHub](https://github.com/hexojs/hexo/issues).
+主要是对本博客中所用到的引擎版本以及相关内容
 
-## Quick Start
+## 两种解决办法：多视椎体渲染和对数深度
 
 ### Create a new post
 
 ``` bash
-$ hexo new "My New Post 22222"
+$ hexo new "My New Post22"
 ```
 
 More info: [Writing](https://hexo.io/docs/writing.html)
