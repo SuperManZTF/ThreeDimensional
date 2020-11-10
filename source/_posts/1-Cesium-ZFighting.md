@@ -50,7 +50,7 @@ gl.polygonOffset(1.0, 1.0);
 ## 3. 多视锥体渲染
 
 &ensp; &ensp; &ensp; 多视锥体渲染的关键是根据frameState.commandList来计算视锥体的远近截面和视锥体数量，并将frameState.commandList分类存放到view.frustumCommandsList。在Cesium-view中View.prototype.createPotentiallyVisibleSet是关键方法。
-&ensp; &ensp; &ensp; view类中的frustumCommandsList在scene.executeCommands中会遍历并执行其中的DrawCommand，这个数组中根据视锥体数量保存着FrustumCommands（其中根据Pass保存渲染不同类型的对象的DrawCommand）。相信阅读这篇博客的同仁是熟悉Cesium渲染流程的，此处不在赘述，如果不理解请在scene.executeCommands函数中自行断点。
+&ensp; &ensp; &ensp; view类中的frustumCommandsList在scene.executeCommands中会遍历并执行其中的DrawCommand，这个数组中根据视锥体数量保存着FrustumCommands（其中根据Pass保存渲染不同类型的对象的DrawCommand）。相信阅读这篇博客的同仁是熟悉Cesium渲染流程的，此处不在赘述，如果不理解请在scene.executeCommands函数中自行断点。由于该方法涉及的内容很多，这里我先贴出代码注释，接下来会把涉及到的每个点进行讲解，最后再整体总结一遍流程。
 
 ``` bash
 View.prototype.createPotentiallyVisibleSet = function (scene) {
@@ -282,4 +282,77 @@ function CullingVolume(planes) {
 
 ```
 
+&ensp; &ensp; &ensp; 在DrawCommand中会有boundingVolume（包围球），scene.isVisible(command, cullingVolume, occluder)会计算判断一个DrawCommand是否可以在此帧渲染，这个判断至关重要！
+
+``` bash
+Scene.prototype.isVisible = function (command, cullingVolume, occluder) {
+  return (
+    defined(command) &&
+    (!defined(command.boundingVolume) || !command.cull ||
+      (cullingVolume.computeVisibility(command.boundingVolume) !==
+        Intersect.OUTSIDE &&
+        (!defined(occluder) ||
+          !command.occlude ||
+          !command.boundingVolume.isOccluded(occluder))))
+  );
+};
+```
+
+&ensp; &ensp; &ensp; 在上面代码中有两个计算函数：cullingVolume.computeVisibility和command.boundingVolume.isOccluded，在上面已经讲过cullingVolume和occluder的定义以及用途，此处不再赘述。此处得出一个重要结论：(!scene.isVisible(command, cullingVolume, occluder))为false，DrawCommand就是可以渲染的! 这里需要说明一下，cullingVolume.computeVisibility的计算结果有三种情况，如下代码：
+
+``` bash
+var Intersect = {
+  /**
+   * Represents that an object is not contained within the frustum.
+   *
+   * @type {Number}
+   * @constant
+   */
+  OUTSIDE: -1,
+
+  /**
+   * Represents that an object intersects one of the frustum s planes.
+   *
+   * @type {Number}
+   * @constant
+   */
+  INTERSECTING: 0,
+
+  /**
+   * Represents that an object is fully within the frustum.
+   *
+   * @type {Number}
+   * @constant
+   */
+  INSIDE: 1,
+};
+```
+
+&ensp; &ensp; &ensp; 如果一个DrawCommand是可以渲染的，接下来它就将参与计算相机的远近截面。这个地方的远近截面是所有可渲染的DrawCommand计算出的commandNear和commandFar的累计，累计规则：选出near的最小值和far的最大值。每个DrawCommand是如何计算出commandNear和commandFar呢？
+
+``` bash
+BoundingSphere.computePlaneDistances = function (
+  sphere,
+  position,
+  direction,
+  result
+) {
+  if (!defined(result)) {
+    result = new Interval();
+  }
+
+  var toCenter = Cartesian3.subtract(
+    sphere.center,
+    position,
+    scratchCartesian3
+  );
+  var mag = Cartesian3.dot(direction, toCenter);
+
+  result.start = mag - sphere.radius;
+  result.stop = mag + sphere.radius;
+  return result;
+};
+```
+
+&ensp; &ensp; &ensp; 上面函数中有四个参数：sphere（DrawCommand包围球）position（相机世界坐标位置）direction（相机世界坐标朝向）result（返回结果），注意这里调用这个方法计算传入的参数含义只是在当前计算环境下传参意义，如果此函数用作他用另当别论。渲染指令的包围球由center和radius定义，即包围球位置和半径；通过center和position构建一条向量N，N向direction做投影P（点积计算），投影P在direction方向上的投影“覆盖”距离加上radius就是commandFar，减去radius就是commandNear，如图示。
 &ensp; &ensp; &ensp; 
