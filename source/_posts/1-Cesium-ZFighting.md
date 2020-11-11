@@ -355,4 +355,78 @@ BoundingSphere.computePlaneDistances = function (
 ```
 
 &ensp; &ensp; &ensp; 上面函数中有四个参数：sphere（DrawCommand包围球）position（相机世界坐标位置）direction（相机世界坐标朝向）result（返回结果），注意这里调用这个方法计算传入的参数含义只是在当前计算环境下传参意义，如果此函数用作他用另当别论。渲染指令的包围球由center和radius定义，即包围球位置和半径；通过center和position构建一条向量N，N向direction做投影P（点积计算），投影P在direction方向上的投影“覆盖”距离加上radius就是commandFar，减去radius就是commandNear，如图示。
-&ensp; &ensp; &ensp; 
+&ensp; &ensp; &ensp; 已经计算出了每个可渲染的DrawCommand以及累计得到了near和far，接下来就要确定视锥体的数量updateFrustums；由下面代码可以看出，根据near和far计算视锥体数量就靠一个公式：numFrustums = Math.ceil(Math.log(far / near) / Math.log(farToNearRatio))，这个公式将其输入到Graph中看一下函数图像，视锥体数量分为三个：1到1000米、1000到100万、100万到100亿之间，如图示。有了视锥体数量之后就可以创建FrustumCommands并放到view.frustumCommandsList中，上文已经说过了，view.frustumCommandsList在scene.executeCommands中遍历执行。
+
+``` bash
+function updateFrustums(view, scene, near, far) {
+  var frameState = scene.frameState;
+  var camera = frameState.camera;
+  var farToNearRatio = frameState.useLogDepth
+    ? scene.logarithmicDepthFarToNearRatio
+    : scene.farToNearRatio;
+  var is2D = scene.mode === SceneMode.SCENE2D;
+  var nearToFarDistance2D = scene.nearToFarDistance2D;
+
+  // The computed near plane must be between the user defined near and far planes.
+  // The computed far plane must between the user defined far and computed near.
+  // This will handle the case where the computed near plane is further than the user defined far plane.
+  near = Math.min(Math.max(near, camera.frustum.near), camera.frustum.far);
+  far = Math.max(Math.min(far, camera.frustum.far), near);
+
+  var numFrustums;
+  if (is2D) {
+    ......
+  } else {
+    // The multifrustum for 3D/CV is non-uniformly distributed.
+    numFrustums = Math.ceil(Math.log(far / near) / Math.log(farToNearRatio));
+  }
+
+  var frustumCommandsList = view.frustumCommandsList;
+  frustumCommandsList.length = numFrustums;
+  for (var m = 0; m < numFrustums; ++m) {
+    var curNear;
+    var curFar;
+
+    if (is2D) {
+      ......
+    } else {
+      curNear = Math.max(near, Math.pow(farToNearRatio, m) * near);
+      curFar = Math.min(far, farToNearRatio * curNear);
+    }
+    var frustumCommands = frustumCommandsList[m];
+    if (!defined(frustumCommands)) {
+      frustumCommands = frustumCommandsList[m] = new FrustumCommands(
+        curNear,
+        curFar
+      );
+    } else {
+      frustumCommands.near = curNear;
+      frustumCommands.far = curFar;
+    }
+  }
+}
+```
+
+&ensp; &ensp; &ensp; 在View.prototype.createPotentiallyVisibleSet方法中有必要说一下_commandExtents这个数组，其实很简单就是在DrawCommand真正加入到view.frustumCommandsList中之前临时存放的数组，数组中的每个CommandExtent存放了DrawCommand和DrawCommand的near/far（准确说是commandNear/commandFar），根据视锥体数量来将_commandExtents数组中的DrawCommand分别添加到view.frustumCommandsList的不同视锥体指令数组之中。
+
+``` bash
+function CommandExtent() {
+  this.command = undefined;
+  this.near = undefined;
+  this.far = undefined;
+}
+```
+
+&ensp; &ensp; &ensp; 至此，View.prototype.createPotentiallyVisibleSet方法中计算视锥体数量和相机远近截面的重要点都已经介绍了，接下来整体的讲一遍流程（一定要去打个断点再结合本文来理解）：
+
+1. 获取frameState.commandList（在这一帧渲染之前所有的DrawCommand都将存在这个数组）；scene._computeCommandList和scene._overlayCommandList中分别用来存放通用GPU计算的Command（以后再讨论这个东西）和覆盖物的Command。
+2. 获取cullingVolume和occluder，对cullingVolume进行操作，总起来一句话：视锥体由六个面构成，去掉远截面。
+3. 遍历frameState.commandList数组，根据command.pass来区分是什么类型的渲染指令，pass === Pass.COMPUTE就将command添加到scene._computeCommandList中，pass === Pass.OVERLAY就将command添加到scene._overlayCommandList，这两个类型比较特殊。其他的command都将进行if/else判断：有无boundingVolume（包围球）—>是否是ClearCommand清除指令—>以及其他：
+-------------
+有无boundingVolume（包围球）：执行这个条件的代码是最复杂的；首先根据boundingVolume/cullingVolume/occluder对进行command进行选择，scene.isVisible在上文已经讲过了，被留下来的都是可渲染的command，根据包围球和相机位置方向计算commandNear/commandFar，参与near/far累计，然后被添加进commandExtents数组中。
+是否是ClearCommand清除指令：清除指令则直接将command和相机的near/far添加进commandExtents数组中，不参与near/far累计。
+以及其他：执行这个条件的代码是参与near/far累计操作的，它的累计是使用的相机near/far，然后添加进commandExtents数组中。
+-------------
+4.累计完near/far，并将所有符合条件的command添加到commandExtents之后，就将进行视锥体个数的计算updateFrustums，创建对应的FrustumCommands并存在view.frustumCommandsList之中。
+5.遍历commandExtents数组将其中的command分别存储到不同的视锥体中FrustumCommands，注意：如果一个command被两个视锥体同时占有，则需要分别加入到两个视锥体指令之中，此处也是多视锥体渲染解决深度问题的性能问题所在，因为跨视锥体的command需要渲染两次。
+6.最后将commandExtents数组进行清除操作，将所有视锥体的远近截面值存储到frameState.frustumSplits数组中（主要用于调试用）；提示：看这部分源码会注意到，代码中有关于shadow的near/far相关计算，因为阴影的生成也是与相机相关的，near/far是必须的，这里就不讨论了。
