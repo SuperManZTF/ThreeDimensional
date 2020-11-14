@@ -430,3 +430,74 @@ function CommandExtent() {
 4.累计完near/far，并将所有符合条件的command添加到commandExtents之后，就将进行视锥体个数的计算updateFrustums，创建对应的FrustumCommands并存在view.frustumCommandsList之中。
 5.遍历commandExtents数组将其中的command分别存储到不同的视锥体中FrustumCommands，注意：如果一个command被两个视锥体同时占有，则需要分别加入到两个视锥体指令之中，此处也是多视锥体渲染解决深度问题的性能问题所在，因为跨视锥体的command需要渲染两次。
 6.最后将commandExtents数组进行清除操作，将所有视锥体的远近截面值存储到frameState.frustumSplits数组中（主要用于调试用）；提示：看这部分源码会注意到，代码中有关于shadow的near/far相关计算，因为阴影的生成也是与相机相关的，near/far是必须的，这里就不讨论了。
+&ensp; &ensp; &ensp; 总结：文首说过“多视椎体渲染”是为了解决深度冲突的问题；Cesium通过所有的的DrawCommand累计出相机最终的near和far，并通过一个公式确定在这一帧需要多少个视椎体进行渲染，然后将command分别存储在不同视椎体中，上面我们提到过一个结论：经过矩阵变换最终写入深度缓冲区的深度值是“片元距离相机视锥体近截面的距离”；也就是说相机的near越接近command，command的片元深度值就越小；所以累计计算near和far以及视椎体数量都是为了使command离相机的near面更近，深度值精度更高！如果有多个视椎体的话，cesium会遍历所有视椎体（最多三个），从后往前渲染，最远处的视椎体渲染完之后，清除深度，再使用下一个视椎体渲染，渲染完清除深度以此类推。
+## 4. 对数深度
+&ensp; &ensp; &ensp; 在第一小节中提到了WebGL扩展EXT_frag_depth，Cesium中的对数深度需要这个扩展（其他基于WebGL的引擎的对数深度实现都需要），因为在片元着色器中需要使用gl_FragDepthEXT来修改即将写入ZBuffer中的深度值。
+```bash
+// 顶点着色器
+
+varying float v_depthFromNearPlusOne;
+uniform vec2 czm_currentFrustum;// vec2(near,far)
+vec4 czm_updatePositionDepth(vec4 coords) {
+   coords.z = clamp(coords.z / coords.w, -1.0, 1.0) * coords.w;
+   return coords;
+}
+void czm_vertexLogDepth()
+{
+   v_depthFromNearPlusOne = (gl_Position.w - czm_currentFrustum.x) + 1.0;
+   gl_Position = czm_updatePositionDepth(gl_Position);
+}
+```
+```bash
+// 片元着色器
+
+varying float v_depthFromNearPlusOne;
+uniform float czm_farDepthFromNearPlusOne;// far -near + 1.0
+uniform float czm_oneOverLog2FarDepthFromNearPlusOne;
+
+void czm_writeLogDepth(float depth)
+{
+   if (depth <= 0.9999999 || depth > czm_farDepthFromNearPlusOne) {
+      discard;
+   }
+
+   gl_FragDepthEXT = log2(depth) * czm_oneOverLog2FarDepthFromNearPlusOne;
+}
+
+void czm_writeLogDepth() {
+   czm_writeLogDepth(v_depthFromNearPlusOne);
+}
+```
+&ensp; &ensp; &ensp;上面代码是顶点着色器和片元着色器与对数深度相关的代码，在Cesium-Shader中这块代码还有其他处理，为了方便理解我做过精简。这里我要做一个说明：在上一节中我们计算过多视椎体，在使用对数深度开启时（scene.logarithmicDepthBuffer = true）,多视椎体的计算还是需要的，只不过参与计算的系数farToNearRatio不同(numFrustums = Math.ceil(Math.log(far / near) / Math.log(farToNearRatio)))。通过logarithmicDepthFarToNearRatio参与计算之后视椎体数量会减少，上面有张图可以说明。
+```bash
+/**
+   * The far-to-near ratio of the multi-frustum when using a normal depth buffer.
+   * <p>
+   * This value is used to create the near and far values for each frustum of the multi-frustum. It is only used
+   * when {@link Scene#logarithmicDepthBuffer} is <code>false</code>. When <code>logarithmicDepthBuffer</code> is
+   * <code>true</code>, use {@link Scene#logarithmicDepthFarToNearRatio}.
+   * </p>
+   *
+   * @type {Number}
+   * @default 1000.0
+   */
+this.farToNearRatio = 1000.0;
+
+/**
+   * The far-to-near ratio of the multi-frustum when using a logarithmic depth buffer.
+   * <p>
+   * This value is used to create the near and far values for each frustum of the multi-frustum. It is only used
+   * when {@link Scene#logarithmicDepthBuffer} is <code>true</code>. When <code>logarithmicDepthBuffer</code> is
+   * <code>false</code>, use {@link Scene#farToNearRatio}.
+   * </p>
+   *
+   * @type {Number}
+   * @default 1e9
+   */
+this.logarithmicDepthFarToNearRatio = 1e9;
+```
+&ensp; &ensp; &ensp;对数深度的处理核心就是着色器当中的重新计算片元深度的代码，大家可以把深度计算公式在Graph中看一眼函数图像，一切都明白了！depth值越大，经过log之后曲线增长越缓，这说明什么？这说明片元离相机近截面越远，经过log算出来的depth值会比线性计算出来的值要小很多，值小，精度就够了！
+
+-------------
+文中如有错误，万望批评指正，邮箱:1780721345@qq.com
+
