@@ -355,7 +355,9 @@ BoundingSphere.computePlaneDistances = function (
 ```
 
 &ensp; &ensp; &ensp; 上面函数中有四个参数：sphere（DrawCommand包围球）position（相机世界坐标位置）direction（相机世界坐标朝向）result（返回结果），注意这里调用这个方法计算传入的参数含义只是在当前计算环境下传参意义，如果此函数用作他用另当别论。渲染指令的包围球由center和radius定义，即包围球位置和半径；通过center和position构建一条向量N，N向direction做投影P（点积计算），投影P在direction方向上的投影“覆盖”距离加上radius就是commandFar，减去radius就是commandNear，如图示。
+![计算Command的near/far](nearfar.png)
 &ensp; &ensp; &ensp; 已经计算出了每个可渲染的DrawCommand以及累计得到了near和far，接下来就要确定视锥体的数量updateFrustums；由下面代码可以看出，根据near和far计算视锥体数量就靠一个公式：numFrustums = Math.ceil(Math.log(far / near) / Math.log(farToNearRatio))，这个公式将其输入到Graph中看一下函数图像，视锥体数量分为三个：1到1000米、1000到100万、100万到100亿之间，如图示。有了视锥体数量之后就可以创建FrustumCommands并放到view.frustumCommandsList中，上文已经说过了，view.frustumCommandsList在scene.executeCommands中遍历执行。
+![计算视锥体数量](numFrust.jpg)
 
 ``` bash
 function updateFrustums(view, scene, near, far) {
@@ -432,6 +434,7 @@ function CommandExtent() {
 6.最后将commandExtents数组进行清除操作，将所有视锥体的远近截面值存储到frameState.frustumSplits数组中（主要用于调试用）；提示：看这部分源码会注意到，代码中有关于shadow的near/far相关计算，因为阴影的生成也是与相机相关的，near/far是必须的，这里就不讨论了。
 &ensp; &ensp; &ensp; 总结：文首说过“多视椎体渲染”是为了解决深度冲突的问题；Cesium通过所有的的DrawCommand累计出相机最终的near和far，并通过一个公式确定在这一帧需要多少个视椎体进行渲染，然后将command分别存储在不同视椎体中，上面我们提到过一个结论：经过矩阵变换最终写入深度缓冲区的深度值是“片元距离相机视锥体近截面的距离”；也就是说相机的near越接近command，command的片元深度值就越小；所以累计计算near和far以及视椎体数量都是为了使command离相机的near面更近，深度值精度更高！如果有多个视椎体的话，cesium会遍历所有视椎体（最多三个），从后往前渲染，最远处的视椎体渲染完之后，清除深度，再使用下一个视椎体渲染，渲染完清除深度以此类推。
 ## 4. 对数深度
+![曲线比较](depth.jpg)
 &ensp; &ensp; &ensp; 在第一小节中提到了WebGL扩展EXT_frag_depth，Cesium中的对数深度需要这个扩展（其他基于WebGL的引擎的对数深度实现都需要），因为在片元着色器中需要使用gl_FragDepthEXT来修改即将写入ZBuffer中的深度值。
 ```bash
 // 顶点着色器
@@ -497,7 +500,7 @@ this.farToNearRatio = 1000.0;
 this.logarithmicDepthFarToNearRatio = 1e9;
 ```
 &ensp; &ensp; &ensp;对数深度的处理核心就是着色器当中的重新计算片元深度的代码，大家可以把深度计算公式在Graph中看一眼函数图像，一切都明白了！depth值越大，经过log之后曲线增长越缓，这说明什么？这说明片元离相机近截面越远，经过log算出来的depth值会比线性计算出来的值要小很多，值小，精度就够了！
-
--------------
-文中如有错误，万望批评指正，邮箱:1780721345@qq.com
+{% blockquote @superman 1780721345@qq.com %}
+文章中有任何错误，请批评勘正
+{% endblockquote %}
 
