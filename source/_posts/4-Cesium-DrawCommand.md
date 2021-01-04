@@ -66,8 +66,8 @@ DrawCommand.prototype.execute = function (context, passState) {
 };
 ```
 
-&ensp; &ensp; &ensp; 上面代码中尤其值得注意的是passState这个参数，这个对象很重要！！！
+&ensp; &ensp; &ensp; 上面代码中尤其值得注意的是passState这个参数，这个对象很重要！！！在DrawCommand中有一个_framebuffer变量，当这个变量不为Undefined时，说明这个渲染指令将绘制到挂载的这个FBO中，否则将绘制到passState中的FBO上。
 
-## 2. DrawCommand中比较重要的几个属性
-
-## 3. DrawCommand和DerivedCommand有什么区别？
+{% blockquote @superman 1780721345@qq.com %}
+文章中有任何错误，请批评勘正
+{% endblockquote %}
