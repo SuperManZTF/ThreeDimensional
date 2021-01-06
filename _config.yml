@@ -108,4 +108,4 @@ theme: landscape
 deploy:
   type: git
 	repository: https://github.com/SuperManZTF/ThreeDimensional.git
-	branch: release
+	branch: dev
