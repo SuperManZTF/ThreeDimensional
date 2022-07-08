@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+
+  
+  <title>Cesium-地球瓦片遮挡计算 | SuperMan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="&amp;ensp; &amp;ensp; &amp;ensp; 关于在地球上判断一个Tile（或者其他几何体）是否可见的计算是十分必要的，尤其是在GIS引擎当中，如何能精准的计算出一个Tile是否可见决定着与这个Tile相关的资源（纹理切片&#x2F;地形数据）是否下载以及这个Tile是否需要渲染。由于地球的影响，视锥体剔除这种过滤方式不能够满足Tile是否可见的判断，因为即使在视锥体之内，地球背面的Tile是无法断定是否可见的">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Cesium-地球瓦片遮挡计算">
+<meta property="og:url" content="https://github.com/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/index.html">
+<meta property="og:site_name" content="SuperMan">
+<meta property="og:description" content="&amp;ensp; &amp;ensp; &amp;ensp; 关于在地球上判断一个Tile（或者其他几何体）是否可见的计算是十分必要的，尤其是在GIS引擎当中，如何能精准的计算出一个Tile是否可见决定着与这个Tile相关的资源（纹理切片&#x2F;地形数据）是否下载以及这个Tile是否需要渲染。由于地球的影响，视锥体剔除这种过滤方式不能够满足Tile是否可见的判断，因为即使在视锥体之内，地球背面的Tile是无法断定是否可见的">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/shizhuiti.jpg">
+<meta property="og:image" content="https://github.com/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/shuxuemoxing.jpg">
+<meta property="og:image" content="https://github.com/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/mianjisuan.jpg">
+<meta property="og:image" content="https://github.com/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/zhuijisuan.jpg">
+<meta property="og:image" content="https://github.com/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/goujian.jpg">
+<meta property="og:image" content="https://github.com/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/zhebidian.jpg">
+<meta property="article:published_time" content="2021-01-04T07:07:45.000Z">
+<meta property="article:modified_time" content="2022-07-08T02:21:04.605Z">
+<meta property="article:author" content="SuperMan">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/shizhuiti.jpg">
+  
+    <link rel="alternate" href="/ThreeDimensional/atom.xml" title="SuperMan" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  
+<link rel="stylesheet" href="/ThreeDimensional/css/style.css">
+
+<meta name="generator" content="Hexo 5.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/ThreeDimensional/" id="logo">SuperMan</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/ThreeDimensional/">Home</a>
+        
+          <a class="main-nav-link" href="/ThreeDimensional/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/ThreeDimensional/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="https://github.com/SuperManZTF/ThreeDimensional"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-5-Cesium-地球瓦片遮挡计算" class="article article-type-post" itemscope
+   itemprop="blogPost">
+   <div class="article-meta">
+      <a href="/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/" class="article-date">
+  <time datetime="2021-01-04T07:07:45.000Z" itemprop="datePublished">2021-01-04</time>
+</a>
+      
+   </div>
+   <div class="article-inner">
+      
+      
+      <header class="article-header">
+         
+  
+    <h1 class="article-title" itemprop="name">
+      Cesium-地球瓦片遮挡计算
+    </h1>
+  
+
+      </header>
+      
+      <!-- <div class="article-entry" itemprop="articleBody">
+         
+         <p>&ensp; &ensp; &ensp; 关于在地球上判断一个Tile（或者其他几何体）是否可见的计算是十分必要的，尤其是在GIS引擎当中，如何能精准的计算出一个Tile是否可见决定着与这个Tile相关的资源（纹理切片/地形数据）是否下载以及这个Tile是否需要渲染。由于地球的影响，视锥体剔除这种过滤方式不能够满足Tile是否可见的判断，因为即使在视锥体之内，地球背面的Tile是无法断定是否可见的。因此Horizon Culling（习惯叫做“地平线剔除”）应运而生。</p>
+<h2 id="1-Horizon-Culling"><a href="#1-Horizon-Culling" class="headerlink" title="1. Horizon Culling"></a>1. Horizon Culling</h2><p>&ensp; &ensp; &ensp; 如下图所示，白实线为相机视锥体，白虚线为viewer（相机）与地球切线（地平线），红点位于视锥体之外，绿点和蓝点位于视锥体之内，但是绿点都是可见的（没有地球遮挡），蓝点虽然在视锥体之内，但是却被地球遮挡了（即不可见也就是不可渲染），那么如何判定蓝点是否可见呢？</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/shizhuiti.jpg" alt="剔除"></p>
+<p>&ensp; &ensp; &ensp; 如下图所示，首先将地球抽象为一个单位球（unit-sphere即半径为1，至于如何抽象下面会详细介绍），由viewer发出的两条射线与球向切（地平线），实际上与单位球相切的线会有无数条，它们组成一个圆锥（自行脑补）。图中灰色阴影部分就是从viewer方向看被单位球遮挡住的部分。可以这样说，位于圆锥的底面之前的是可见的，位于之后的是不可见的，问题就变成了“一个点在一个面的前面还是后面”。</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/shuxuemoxing.jpg" alt="构建数学计算模型"></p>
+<p>&ensp; &ensp; &ensp; 如下图所示，T为处于视锥内的任一点，要想判断T是在圆锥底面之前还是之后很简单，就看VT在VC方向上的投影距离VQ，如果VQ &gt; VP则该点被地球遮蔽，如果VQ &lt; VP则该点未被遮蔽；具体推到计算过程其实是很简单的，因为这个球是单位球即HC=1，V是相机位置，C为地球原点，把VP求出来应该算是初一下学期期末考试的题吧？求出VT的投影VQ应该是算是胎教题吧？<br>&ensp; &ensp; &ensp; 能够判定视锥体内任意一个点在圆锥底面的前后就万无一失了吗？当然不是！看一看第一张图最下边那个绿点，向VC投影之后在要大于VP，但是它可没有被遮挡！所以还需要一个判断，判断“一个点是否在圆锥中，这个圆锥是个底部无限延长的”。</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/mianjisuan.jpg" alt="面测试"></p>
+<p>&ensp; &ensp; &ensp; 如下图所示，判断一个点是否在无限锥之内，只需要比夹角大小就可以了。至于计算太简单了就不用说了！</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/zhuijisuan.jpg" alt="无限锥测试"></p>
+<p>&ensp; &ensp; &ensp; 一个十分重要的问题：上文总是说单位球，为什么要构造单位球呢？定义一个三维球的标准方程：(x - a)2 + (y - b)2 + (z - c)2 = r2，单位球方程为：x2 + y2 + z2 = 1，定义一个单位椭球的方程为：x2/a2 + y2/b2 + z2/c2 = 1，由公式可以看出(x/a)2 + (y/b)2 + (z/c)2 = 1, 单位椭球其实从某种意义上说是单位球在xyz轴上的缩放，将一个坐标的xyz分别除以椭球的三个轴半径即可将椭球坐标转换到单位球坐标系中（Cesium称为椭球缩放坐标系 ellipsoid-scaled space），代码如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">// Ellipsoid radii - WGS84 shown here</span><br><span class="line">var rX = 6378137.0;</span><br><span class="line">var rY = 6378137.0;</span><br><span class="line">var rZ = 6356752.3142451793;</span><br><span class="line"></span><br><span class="line">// Vector CV</span><br><span class="line">var cvX = cameraPosition.x / rX;</span><br><span class="line">var cvY = cameraPosition.y / rY;</span><br><span class="line">var cvZ = cameraPosition.z / rZ;</span><br><span class="line"></span><br><span class="line">// VH</span><br><span class="line">var vhMagnitudeSquared = cvX * cvX + cvY * cvY + cvZ * cvZ - 1.0;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">// Target position, transformed to scaled space</span><br><span class="line">var tX = position.x / rX;</span><br><span class="line">var tY = position.y / rY;</span><br><span class="line">var tZ = position.z / rZ;</span><br><span class="line"></span><br><span class="line">// Vector VT</span><br><span class="line">var vtX = tX - cvX;</span><br><span class="line">var vtY = tY - cvY;</span><br><span class="line">var vtZ = tZ - cvZ;</span><br><span class="line">var vtMagnitudeSquared = vtX * vtX + vtY * vtY + vtZ * vtZ;</span><br><span class="line"></span><br><span class="line">// VT dot VC is the inverse of VT dot CV</span><br><span class="line">var vtDotVc = -(vtX * cvX + vtY * cvY + vtZ * cvZ);</span><br><span class="line"></span><br><span class="line">// 通过判断是否在无限锥内外和圆锥底面前后来决定是否遮蔽</span><br><span class="line">var isOccluded = vtDotVc &gt; vhMagnitudeSquared &amp;&amp; </span><br><span class="line">                vtDotVc * vtDotVc / vtMagnitudeSquared &gt; vhMagnitudeSquared;</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-Computing-the-horizon-occlusion-point"><a href="#2-Computing-the-horizon-occlusion-point" class="headerlink" title="2. Computing the horizon occlusion point"></a>2. Computing the horizon occlusion point</h2><p>&ensp; &ensp; &ensp; 上文我们仅仅是判断一个点在viewer方向上是否被地球遮蔽，那么问题来了，如果是一个地形Tile呢？总不能遍历这个Tile所有的顶点来判断其是否被遮蔽吧？Cesium中的解决办法是将Tile计算出一个遮蔽点，通过这个遮蔽点来参与第一节的计算，就能够判断这个Tile是否被遮挡。记得某位前辈曾说过，图形学搞到底全都是数学问题，这在Cesium中体现的淋漓尽致。</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/goujian.jpg" alt="遮蔽点计算"></p>
+<p>&ensp; &ensp; &ensp; 如上图所示，蓝色球为单位球（unit-sphere），棕色几何体为地形Tile，OC是从单位球心到Tile包围体（可能是包围球也可能是旋转包围盒，不过这都不重要，我们只要其center点）中心点C发出的一条射线，V是Tile上的一个顶点，H是V与单位球的切线，其实V与单位球有无数个切线，但是只有两条切线会与OC相交（H-V-P和虚线），通过遍历Tile所有顶点计算顶点与单位球切线和OC的交点，找出最大的OP距离，这个最大的OP距离的P交点，即为所要得到的 horizon occlusion point。</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/zhebidian.jpg" alt="遮蔽点计算"></p>
+<p>&ensp; &ensp; &ensp; 如上图所示，关于遮蔽点的具体计算无非就是求切线求交点等问题，很简单的立体几何计算，此处就不啰里啰唆了。为什么说最大的OP即在OC方向上最远的交点P就是遮蔽点呢？为什么通过判断这个点就可以决定这个Tile是否被地球遮挡呢？我们可以想象一下，从Viewer方向看，一个Tile是否被地球遮蔽，取决于一个很要的东西：切线（地平线），主动权在Viewer这里，现在换个思路，如果我们从Tile的每个顶点看相机呢？最早看到相机的那个顶点与单位球的切线HV与OC的交点就是P！相机最早看到P就相当于看到Tile的V点了！</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line">// EllipsoidalOccluder.js</span><br><span class="line">/**</span><br><span class="line"> * 计算遮蔽点（注意需要转换到椭球缩放空间）</span><br><span class="line"> * @param ellipsoid WGS84椭球对象</span><br><span class="line"> * @param directionToPoint Tile中心点</span><br><span class="line"> * @param positions Tile的四个点（此处注意上文说到遍历Tile的顶点是不对的，</span><br><span class="line"> *   首先此处尚且没有Tile的网格数据，其次遍历顶点性能太差）</span><br><span class="line"> */</span><br><span class="line"><span class="keyword">function</span> computeHorizonCullingPointFromPositions(</span><br><span class="line">  ellipsoid,</span><br><span class="line">  directionToPoint,</span><br><span class="line">  positions,</span><br><span class="line">  result</span><br><span class="line">) &#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (!defined(result)) &#123;</span><br><span class="line">    result = new Cartesian3();</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  var scaledSpaceDirectionToPoint = computeScaledSpaceDirectionToPoint(</span><br><span class="line">    ellipsoid,</span><br><span class="line">    directionToPoint</span><br><span class="line">  );</span><br><span class="line">  var resultMagnitude = 0.0;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (var i = 0, len = positions.length; i &lt; len; ++i) &#123;</span><br><span class="line">    var position = positions[i];</span><br><span class="line">    var candidateMagnitude = computeMagnitude(</span><br><span class="line">      ellipsoid,</span><br><span class="line">      position,</span><br><span class="line">      scaledSpaceDirectionToPoint</span><br><span class="line">    );</span><br><span class="line">    <span class="keyword">if</span> (candidateMagnitude &lt; 0.0) &#123;</span><br><span class="line">      // all points should face the same direction, but this one doesnt, so <span class="built_in">return</span> undefined</span><br><span class="line">      <span class="built_in">return</span> undefined;</span><br><span class="line">    &#125;</span><br><span class="line">    resultMagnitude = Math.max(resultMagnitude, candidateMagnitude);// 找出最大OP</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">return</span> magnitudeToPoint(scaledSpaceDirectionToPoint, resultMagnitude, result);</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>&ensp; &ensp; &ensp; 对于上述代码，只提醒一点：主要将坐标转换到椭球缩放空间，算完之后在转换回去！！！</p>
+<h2 id="3-总结"><a href="#3-总结" class="headerlink" title="3. 总结"></a>3. 总结</h2><p>&ensp; &ensp; &ensp; 在文章开头就说过，以上计算解决了Tile在视锥体之内的地球遮蔽问题，能够判定在视锥体之内，从相机方向看地球背面瓦片是否被遮挡，从而决定Tile是否加载资源是否渲染等，这个过滤很重要！但是在Tile真正组装成DrawCommand之后，这个渲染指令会不会渲染还要经过判断！这跟相机视锥体/Tile包围球/occluder有关，具体计算原理和过程以后再讨论，代码如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Scene.prototype.isVisible = <span class="keyword">function</span> (<span class="built_in">command</span>, cullingVolume, occluder) &#123;</span><br><span class="line">  <span class="built_in">return</span> (</span><br><span class="line">    defined(<span class="built_in">command</span>) &amp;&amp;</span><br><span class="line">    (!defined(command.boundingVolume) ||</span><br><span class="line">      !command.cull ||</span><br><span class="line">      (cullingVolume.computeVisibility(command.boundingVolume) !==</span><br><span class="line">        Intersect.OUTSIDE &amp;&amp;</span><br><span class="line">        (!defined(occluder) ||</span><br><span class="line">          !command.occlude ||</span><br><span class="line">          !command.boundingVolume.isOccluded(occluder))))</span><br><span class="line">  );</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>&ensp; &ensp; &ensp; 本篇博客参考Cesium两篇文章，特此注明！</p>
+<blockquote><p>文章中有任何错误，请批评勘正</p>
+<footer><strong>@superman 1780721345@qq.com</strong></footer></blockquote>
+
+         
+      </div> -->
+      <div class="article-entry" itemprop="articleBody">
+         
+         
+         
+         <p>&ensp; &ensp; &ensp; 关于在地球上判断一个Tile（或者其他几何体）是否可见的计算是十分必要的，尤其是在GIS引擎当中，如何能精准的计算出一个Tile是否可见决定着与这个Tile相关的资源（纹理切片/地形数据）是否下载以及这个Tile是否需要渲染。由于地球的影响，视锥体剔除这种过滤方式不能够满足Tile是否可见的判断，因为即使在视锥体之内，地球背面的Tile是无法断定是否可见的。因此Horizon Culling（习惯叫做“地平线剔除”）应运而生。</p>
+<h2 id="1-Horizon-Culling"><a href="#1-Horizon-Culling" class="headerlink" title="1. Horizon Culling"></a>1. Horizon Culling</h2><p>&ensp; &ensp; &ensp; 如下图所示，白实线为相机视锥体，白虚线为viewer（相机）与地球切线（地平线），红点位于视锥体之外，绿点和蓝点位于视锥体之内，但是绿点都是可见的（没有地球遮挡），蓝点虽然在视锥体之内，但是却被地球遮挡了（即不可见也就是不可渲染），那么如何判定蓝点是否可见呢？</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/shizhuiti.jpg" alt="剔除"></p>
+<p>&ensp; &ensp; &ensp; 如下图所示，首先将地球抽象为一个单位球（unit-sphere即半径为1，至于如何抽象下面会详细介绍），由viewer发出的两条射线与球向切（地平线），实际上与单位球相切的线会有无数条，它们组成一个圆锥（自行脑补）。图中灰色阴影部分就是从viewer方向看被单位球遮挡住的部分。可以这样说，位于圆锥的底面之前的是可见的，位于之后的是不可见的，问题就变成了“一个点在一个面的前面还是后面”。</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/shuxuemoxing.jpg" alt="构建数学计算模型"></p>
+<p>&ensp; &ensp; &ensp; 如下图所示，T为处于视锥内的任一点，要想判断T是在圆锥底面之前还是之后很简单，就看VT在VC方向上的投影距离VQ，如果VQ &gt; VP则该点被地球遮蔽，如果VQ &lt; VP则该点未被遮蔽；具体推到计算过程其实是很简单的，因为这个球是单位球即HC=1，V是相机位置，C为地球原点，把VP求出来应该算是初一下学期期末考试的题吧？求出VT的投影VQ应该是算是胎教题吧？<br>&ensp; &ensp; &ensp; 能够判定视锥体内任意一个点在圆锥底面的前后就万无一失了吗？当然不是！看一看第一张图最下边那个绿点，向VC投影之后在要大于VP，但是它可没有被遮挡！所以还需要一个判断，判断“一个点是否在圆锥中，这个圆锥是个底部无限延长的”。</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/mianjisuan.jpg" alt="面测试"></p>
+<p>&ensp; &ensp; &ensp; 如下图所示，判断一个点是否在无限锥之内，只需要比夹角大小就可以了。至于计算太简单了就不用说了！</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/zhuijisuan.jpg" alt="无限锥测试"></p>
+<p>&ensp; &ensp; &ensp; 一个十分重要的问题：上文总是说单位球，为什么要构造单位球呢？定义一个三维球的标准方程：(x - a)2 + (y - b)2 + (z - c)2 = r2，单位球方程为：x2 + y2 + z2 = 1，定义一个单位椭球的方程为：x2/a2 + y2/b2 + z2/c2 = 1，由公式可以看出(x/a)2 + (y/b)2 + (z/c)2 = 1, 单位椭球其实从某种意义上说是单位球在xyz轴上的缩放，将一个坐标的xyz分别除以椭球的三个轴半径即可将椭球坐标转换到单位球坐标系中（Cesium称为椭球缩放坐标系 ellipsoid-scaled space），代码如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">// Ellipsoid radii - WGS84 shown here</span><br><span class="line">var rX = 6378137.0;</span><br><span class="line">var rY = 6378137.0;</span><br><span class="line">var rZ = 6356752.3142451793;</span><br><span class="line"></span><br><span class="line">// Vector CV</span><br><span class="line">var cvX = cameraPosition.x / rX;</span><br><span class="line">var cvY = cameraPosition.y / rY;</span><br><span class="line">var cvZ = cameraPosition.z / rZ;</span><br><span class="line"></span><br><span class="line">// VH</span><br><span class="line">var vhMagnitudeSquared = cvX * cvX + cvY * cvY + cvZ * cvZ - 1.0;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">// Target position, transformed to scaled space</span><br><span class="line">var tX = position.x / rX;</span><br><span class="line">var tY = position.y / rY;</span><br><span class="line">var tZ = position.z / rZ;</span><br><span class="line"></span><br><span class="line">// Vector VT</span><br><span class="line">var vtX = tX - cvX;</span><br><span class="line">var vtY = tY - cvY;</span><br><span class="line">var vtZ = tZ - cvZ;</span><br><span class="line">var vtMagnitudeSquared = vtX * vtX + vtY * vtY + vtZ * vtZ;</span><br><span class="line"></span><br><span class="line">// VT dot VC is the inverse of VT dot CV</span><br><span class="line">var vtDotVc = -(vtX * cvX + vtY * cvY + vtZ * cvZ);</span><br><span class="line"></span><br><span class="line">// 通过判断是否在无限锥内外和圆锥底面前后来决定是否遮蔽</span><br><span class="line">var isOccluded = vtDotVc &gt; vhMagnitudeSquared &amp;&amp; </span><br><span class="line">                vtDotVc * vtDotVc / vtMagnitudeSquared &gt; vhMagnitudeSquared;</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-Computing-the-horizon-occlusion-point"><a href="#2-Computing-the-horizon-occlusion-point" class="headerlink" title="2. Computing the horizon occlusion point"></a>2. Computing the horizon occlusion point</h2><p>&ensp; &ensp; &ensp; 上文我们仅仅是判断一个点在viewer方向上是否被地球遮蔽，那么问题来了，如果是一个地形Tile呢？总不能遍历这个Tile所有的顶点来判断其是否被遮蔽吧？Cesium中的解决办法是将Tile计算出一个遮蔽点，通过这个遮蔽点来参与第一节的计算，就能够判断这个Tile是否被遮挡。记得某位前辈曾说过，图形学搞到底全都是数学问题，这在Cesium中体现的淋漓尽致。</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/goujian.jpg" alt="遮蔽点计算"></p>
+<p>&ensp; &ensp; &ensp; 如上图所示，蓝色球为单位球（unit-sphere），棕色几何体为地形Tile，OC是从单位球心到Tile包围体（可能是包围球也可能是旋转包围盒，不过这都不重要，我们只要其center点）中心点C发出的一条射线，V是Tile上的一个顶点，H是V与单位球的切线，其实V与单位球有无数个切线，但是只有两条切线会与OC相交（H-V-P和虚线），通过遍历Tile所有顶点计算顶点与单位球切线和OC的交点，找出最大的OP距离，这个最大的OP距离的P交点，即为所要得到的 horizon occlusion point。</p>
+<p><img src="/ThreeDimensional/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/zhebidian.jpg" alt="遮蔽点计算"></p>
+<p>&ensp; &ensp; &ensp; 如上图所示，关于遮蔽点的具体计算无非就是求切线求交点等问题，很简单的立体几何计算，此处就不啰里啰唆了。为什么说最大的OP即在OC方向上最远的交点P就是遮蔽点呢？为什么通过判断这个点就可以决定这个Tile是否被地球遮挡呢？我们可以想象一下，从Viewer方向看，一个Tile是否被地球遮蔽，取决于一个很要的东西：切线（地平线），主动权在Viewer这里，现在换个思路，如果我们从Tile的每个顶点看相机呢？最早看到相机的那个顶点与单位球的切线HV与OC的交点就是P！相机最早看到P就相当于看到Tile的V点了！</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line">// EllipsoidalOccluder.js</span><br><span class="line">/**</span><br><span class="line"> * 计算遮蔽点（注意需要转换到椭球缩放空间）</span><br><span class="line"> * @param ellipsoid WGS84椭球对象</span><br><span class="line"> * @param directionToPoint Tile中心点</span><br><span class="line"> * @param positions Tile的四个点（此处注意上文说到遍历Tile的顶点是不对的，</span><br><span class="line"> *   首先此处尚且没有Tile的网格数据，其次遍历顶点性能太差）</span><br><span class="line"> */</span><br><span class="line"><span class="keyword">function</span> computeHorizonCullingPointFromPositions(</span><br><span class="line">  ellipsoid,</span><br><span class="line">  directionToPoint,</span><br><span class="line">  positions,</span><br><span class="line">  result</span><br><span class="line">) &#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (!defined(result)) &#123;</span><br><span class="line">    result = new Cartesian3();</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  var scaledSpaceDirectionToPoint = computeScaledSpaceDirectionToPoint(</span><br><span class="line">    ellipsoid,</span><br><span class="line">    directionToPoint</span><br><span class="line">  );</span><br><span class="line">  var resultMagnitude = 0.0;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (var i = 0, len = positions.length; i &lt; len; ++i) &#123;</span><br><span class="line">    var position = positions[i];</span><br><span class="line">    var candidateMagnitude = computeMagnitude(</span><br><span class="line">      ellipsoid,</span><br><span class="line">      position,</span><br><span class="line">      scaledSpaceDirectionToPoint</span><br><span class="line">    );</span><br><span class="line">    <span class="keyword">if</span> (candidateMagnitude &lt; 0.0) &#123;</span><br><span class="line">      // all points should face the same direction, but this one doesnt, so <span class="built_in">return</span> undefined</span><br><span class="line">      <span class="built_in">return</span> undefined;</span><br><span class="line">    &#125;</span><br><span class="line">    resultMagnitude = Math.max(resultMagnitude, candidateMagnitude);// 找出最大OP</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">return</span> magnitudeToPoint(scaledSpaceDirectionToPoint, resultMagnitude, result);</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>&ensp; &ensp; &ensp; 对于上述代码，只提醒一点：主要将坐标转换到椭球缩放空间，算完之后在转换回去！！！</p>
+<h2 id="3-总结"><a href="#3-总结" class="headerlink" title="3. 总结"></a>3. 总结</h2><p>&ensp; &ensp; &ensp; 在文章开头就说过，以上计算解决了Tile在视锥体之内的地球遮蔽问题，能够判定在视锥体之内，从相机方向看地球背面瓦片是否被遮挡，从而决定Tile是否加载资源是否渲染等，这个过滤很重要！但是在Tile真正组装成DrawCommand之后，这个渲染指令会不会渲染还要经过判断！这跟相机视锥体/Tile包围球/occluder有关，具体计算原理和过程以后再讨论，代码如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Scene.prototype.isVisible = <span class="keyword">function</span> (<span class="built_in">command</span>, cullingVolume, occluder) &#123;</span><br><span class="line">  <span class="built_in">return</span> (</span><br><span class="line">    defined(<span class="built_in">command</span>) &amp;&amp;</span><br><span class="line">    (!defined(command.boundingVolume) ||</span><br><span class="line">      !command.cull ||</span><br><span class="line">      (cullingVolume.computeVisibility(command.boundingVolume) !==</span><br><span class="line">        Intersect.OUTSIDE &amp;&amp;</span><br><span class="line">        (!defined(occluder) ||</span><br><span class="line">          !command.occlude ||</span><br><span class="line">          !command.boundingVolume.isOccluded(occluder))))</span><br><span class="line">  );</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>&ensp; &ensp; &ensp; 本篇博客参考Cesium两篇文章，特此注明！</p>
+<blockquote><p>文章中有任何错误，请批评勘正</p>
+<footer><strong>@superman 1780721345@qq.com</strong></footer></blockquote>
+
+         
+         
+      </div>
+      <footer class="article-footer">
+         <a data-url="https://github.com/SuperManZTF/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/" data-id="cl5bu37460003x0qt1mvo9yqd" class="article-share-link">Share</a>
+         
+         
+      </footer>
+   </div>
+   
+   
+<nav id="article-nav">
+  
+    <a href="/ThreeDimensional/2021/08/25/1-Cesium-ZFighting/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          Cesium-Z-Fighting 深度冲突问题
+        
+      </div>
+    </a>
+  
+  
+    <a href="/ThreeDimensional/2020/11/08/4-Cesium-DrawCommand/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">Cesium-DrawCommand</div>
+    </a>
+  
+</nav>
+
+   
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/ThreeDimensional/archives/2021/08/">August 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/ThreeDimensional/archives/2021/01/">January 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/ThreeDimensional/archives/2020/11/">November 2020</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/ThreeDimensional/2021/08/25/1-Cesium-ZFighting/">Cesium-Z-Fighting 深度冲突问题</a>
+          </li>
+        
+          <li>
+            <a href="/ThreeDimensional/2021/01/04/5-Cesium-%E5%9C%B0%E7%90%83%E7%93%A6%E7%89%87%E9%81%AE%E6%8C%A1%E8%AE%A1%E7%AE%97/">Cesium-地球瓦片遮挡计算</a>
+          </li>
+        
+          <li>
+            <a href="/ThreeDimensional/2020/11/08/4-Cesium-DrawCommand/">Cesium-DrawCommand</a>
+          </li>
+        
+          <li>
+            <a href="/ThreeDimensional/2020/11/08/3-Cesium-Pass/">Cesium-Pass 渲染对象类型</a>
+          </li>
+        
+          <li>
+            <a href="/ThreeDimensional/2020/11/08/2-Cesium-Precision/">Cesium-Precision 精度问题</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2022 SuperMan<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/ThreeDimensional/" class="mobile-nav-link">Home</a>
+  
+    <a href="/ThreeDimensional/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  
+<link rel="stylesheet" href="/ThreeDimensional/fancybox/jquery.fancybox.css">
+
+  
+<script src="/ThreeDimensional/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/ThreeDimensional/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>
